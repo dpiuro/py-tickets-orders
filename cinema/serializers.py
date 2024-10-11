@@ -88,7 +88,10 @@ class MovieSessionListSerializer(serializers.ModelSerializer):
     cinema_hall_capacity = serializers.IntegerField(
         source="cinema_hall.capacity", read_only=True
     )
-    tickets_available = serializers.SerializerMethodField()
+    tickets_available = serializers.IntegerField(
+        source="available_tickets",
+        read_only=True
+    )
 
     class Meta:
         model = MovieSession
@@ -101,21 +104,20 @@ class MovieSessionListSerializer(serializers.ModelSerializer):
             "tickets_available",
         )
 
-    def get_tickets_available(self, movie_session):
-        total_seats = (
-            movie_session.cinema_hall.rows
-            * movie_session.cinema_hall.seats_in_row
-        )
 
-        taken_seats = movie_session.tickets.count()
-        return total_seats - taken_seats
+class TicketSeatsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = ("row", "seat")
 
 
 class MovieSessionDetailSerializer(serializers.ModelSerializer):
     movie = MovieListSerializer(read_only=True)
     cinema_hall = CinemaHallSerializer(read_only=True)
-    taken_places = serializers.SerializerMethodField()
-    tickets_available = serializers.SerializerMethodField()
+    taken_places = TicketSeatsSerializer(
+        many=True, source="tickets",
+        read_only=True
+    )
 
     class Meta:
         model = MovieSession
@@ -125,19 +127,7 @@ class MovieSessionDetailSerializer(serializers.ModelSerializer):
             "movie",
             "cinema_hall",
             "taken_places",
-            "tickets_available"
         )
-
-    def get_taken_places(self, obj):
-        tickets = obj.tickets.all()
-        return (
-            [{"row": ticket.row, "seat": ticket.seat} for ticket in tickets]
-        )
-
-    def get_tickets_available(self, obj):
-        total_seats = obj.cinema_hall.rows * obj.cinema_hall.seats_in_row
-        taken_seats = obj.tickets.count()
-        return total_seats - taken_seats
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -156,8 +146,14 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ("id", "tickets", "created_at")
 
 
+class TicketCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = ("row", "seat")
+
+
 class OrderCreateSerializer(serializers.ModelSerializer):
-    tickets = serializers.ListField()
+    tickets = TicketCreateSerializer(many=True)
 
     class Meta:
         model = Order
